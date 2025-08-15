@@ -1,6 +1,5 @@
-import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
+package com.example.hiittimer
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -18,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
 import java.util.Locale
 
@@ -25,12 +25,6 @@ import java.util.Locale
  * A data class to hold all the timer settings from the landing page.
  * This is how you would pass the values from one screen to the next.
  */
-data class TimerSettings(
-    val prepSeconds: Int,
-    val workSeconds: Int,
-    val restSeconds: Int,
-    val rounds: Int
-)
 
 enum class TimerMode { PREP, WORK, REST, FINISHED }
 
@@ -46,12 +40,21 @@ enum class TimerMode { PREP, WORK, REST, FINISHED }
 fun TimerPage(settings: TimerSettings, onReset: () -> Unit) {
     // State variables for the timer
     var isRunning by remember { mutableStateOf(false) }
-    var totalElapsedTime by remember { mutableStateOf(0) }
-    var currentRound by remember { mutableStateOf(1) }
+    var totalElapsedTime by remember { mutableIntStateOf(0) }
+    var currentRound by remember { mutableIntStateOf(1) }
     var currentMode by remember { mutableStateOf(TimerMode.PREP) }
-    var timeRemaining by remember { mutableStateOf(settings.prepSeconds) }
+    var timeRemaining by remember { mutableIntStateOf(settings.prepSeconds) }
     var isResetDialogVisible by remember { mutableStateOf(false) }
     var isVolumeOn by remember { mutableStateOf(true) }
+
+    val dynamicColor = when (currentMode) {
+        TimerMode.PREP -> MaterialTheme.colorScheme.primary
+        TimerMode.WORK -> MaterialTheme.colorScheme.background
+        TimerMode.REST -> MaterialTheme.colorScheme.surface
+        TimerMode.FINISHED -> MaterialTheme.colorScheme.primary
+    }
+
+    val context = LocalContext.current
 
     // LaunchedEffect is used to run a coroutine that handles the timer logic
     LaunchedEffect(key1 = isRunning) {
@@ -60,6 +63,9 @@ fun TimerPage(settings: TimerSettings, onReset: () -> Unit) {
             while (isRunning && currentMode != TimerMode.FINISHED) {
                 // Decrement timeRemaining and increment totalElapsedTime every second
                 if (timeRemaining > 0) {
+                    if (timeRemaining < 4) {
+                        SoundPlayer.playCountdown(context)
+                    }
                     delay(1000L)
                     timeRemaining--
                     totalElapsedTime++
@@ -69,25 +75,25 @@ fun TimerPage(settings: TimerSettings, onReset: () -> Unit) {
                         TimerMode.PREP -> {
                             currentMode = TimerMode.WORK
                             timeRemaining = settings.workSeconds
-                            // TODO: Add a sound for mode change here
+                            SoundPlayer.playSwitch(context)
                         }
                         TimerMode.WORK -> {
                             if (currentRound < settings.rounds) {
                                 currentMode = TimerMode.REST
                                 timeRemaining = settings.restSeconds
-                                // TODO: Add a sound for mode change here
+                                SoundPlayer.playSwitch(context)
                             } else {
                                 // All rounds are complete, finish the workout
                                 currentMode = TimerMode.FINISHED
                                 isRunning = false
-                                // TODO: Add a final sound/celebration here
+                                SoundPlayer.playFinish(context)
                             }
                         }
                         TimerMode.REST -> {
                             currentMode = TimerMode.WORK
                             timeRemaining = settings.workSeconds
                             currentRound++
-                            // TODO: Add a sound for mode change here
+                            SoundPlayer.playSwitch(context)
                         }
                         TimerMode.FINISHED -> {
                             // Should not be reachable, but as a safeguard
@@ -99,77 +105,83 @@ fun TimerPage(settings: TimerSettings, onReset: () -> Unit) {
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = dynamicColor
     ) {
-        // Mode display
-        TimerDisplayRow(label = "Mode", value = currentMode.name, color = MaterialTheme.colorScheme.primary)
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Timer countdown display
-        Text(
-            text = String.format(Locale.getDefault(), "%02d:%02d", timeRemaining / 60, timeRemaining % 60),
-            fontSize = 96.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.padding(bottom = 24.dp)
-        )
-
-        // Round display
-        TimerDisplayRow(label = "Round", value = "$currentRound / ${settings.rounds}")
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Total elapsed time display
-        TimerDisplayRow(label = "Total Elapsed", value = String.format(Locale.getDefault(), "%02d:%02d", totalElapsedTime / 60, totalElapsedTime % 60))
-
-        Spacer(modifier = Modifier.weight(1f))
-
-        // Control buttons
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            // Volume Toggle Button
-            IconButton(onClick = { isVolumeOn = !isVolumeOn }) {
-                Icon(
-                    imageVector = if (isVolumeOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
-                    contentDescription = "Toggle Volume",
-                    modifier = Modifier.size(48.dp)
-                )
-            }
+            // Mode display
+            TimerDisplayRow(label = "Mode", value = currentMode.name, color = MaterialTheme.colorScheme.secondary)
+            Spacer(modifier = Modifier.height(24.dp))
 
-            // Start/Pause Button
-            Button(
-                onClick = { isRunning = !isRunning },
-                modifier = Modifier
-                    .weight(1f)
-                    .height(64.dp)
-                    .padding(horizontal = 8.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                shape = RoundedCornerShape(12.dp)
+            // Timer countdown display
+            Text(
+                text = String.format(Locale.getDefault(), "%02d:%02d", timeRemaining / 60, timeRemaining % 60),
+                fontSize = 96.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.padding(bottom = 24.dp)
+            )
+
+            // Round display
+            TimerDisplayRow(label = "Round", value = "$currentRound / ${settings.rounds}")
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Total elapsed time display
+            TimerDisplayRow(label = "Total Elapsed", value = String.format(Locale.getDefault(), "%02d:%02d", totalElapsedTime / 60, totalElapsedTime % 60))
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            // Control buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = if (isRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = "Start/Pause",
-                    modifier = Modifier.size(36.dp)
-                )
-            }
+                // Volume Toggle Button
+                IconButton(onClick = { isVolumeOn = !isVolumeOn }) {
+                    Icon(
+                        imageVector = if (isVolumeOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
+                        contentDescription = "Toggle Volume",
+                        modifier = Modifier.size(48.dp)
+                    )
+                }
 
-            // Reset Button
-            IconButton(onClick = { isResetDialogVisible = true }) {
-                Icon(
-                    imageVector = Icons.Default.Refresh,
-                    contentDescription = "Reset",
-                    modifier = Modifier.size(48.dp)
-                )
+                // Start/Pause Button
+                Button(
+                    onClick = { isRunning = !isRunning },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(64.dp)
+                        .padding(horizontal = 8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = "Start/Pause",
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
+
+                // Reset Button
+                IconButton(onClick = { isResetDialogVisible = true }) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Reset",
+                        modifier = Modifier.size(48.dp)
+                    )
+                }
             }
         }
     }
+
 
     // Confirmation dialog for the reset button
     if (isResetDialogVisible) {
@@ -218,10 +230,10 @@ fun TimerPagePreview() {
     MaterialTheme {
         TimerPage(
             settings = TimerSettings(
-                prepSeconds = 30,
-                workSeconds = 45,
-                restSeconds = 15,
-                rounds = 8
+                prepSeconds = 10,
+                workSeconds = 30,
+                restSeconds = 30,
+                rounds = 10
             ),
             onReset = {}
         )
