@@ -1,11 +1,9 @@
 package com.example.hiittimer
 
+import com.example.hiittimer.ui.theme.HIITTimerTheme
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.ui.Modifier
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -18,13 +16,11 @@ data class TimerSettings(
     val restSeconds: Int,
     val rounds: Int
 )
-
-// Main activity to host the Jetpack Compose content
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme {
+            HIITTimerTheme {
                 val navController = rememberNavController()
 
                 NavHost(navController = navController, startDestination = "landing") {
@@ -50,7 +46,6 @@ class MainActivity : ComponentActivity() {
                         val settings = TimerSettings(prep, work, rest, rounds)
 
                         TimerPage(settings = settings, onReset = {
-                            // Navigate back to the landing page
                             navController.popBackStack()
                         })
                     }

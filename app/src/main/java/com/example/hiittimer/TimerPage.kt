@@ -1,5 +1,6 @@
 package com.example.hiittimer
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -48,10 +49,10 @@ fun TimerPage(settings: TimerSettings, onReset: () -> Unit) {
     var isVolumeOn by remember { mutableStateOf(true) }
 
     val dynamicColor = when (currentMode) {
-        TimerMode.PREP -> MaterialTheme.colorScheme.primary
-        TimerMode.WORK -> MaterialTheme.colorScheme.background
-        TimerMode.REST -> MaterialTheme.colorScheme.surface
-        TimerMode.FINISHED -> MaterialTheme.colorScheme.primary
+        TimerMode.PREP -> MaterialTheme.colorScheme.surface
+        TimerMode.WORK -> Color(0xFFC42ECC)
+        TimerMode.REST -> Color(0xFF7FF160)
+        TimerMode.FINISHED -> MaterialTheme.colorScheme.surface
     }
 
     val context = LocalContext.current
@@ -68,7 +69,9 @@ fun TimerPage(settings: TimerSettings, onReset: () -> Unit) {
                     }
                     delay(1000L)
                     timeRemaining--
-                    totalElapsedTime++
+                    if (currentMode != TimerMode.PREP) {
+                        totalElapsedTime++
+                    }
                 } else {
                     // Time for the current mode has run out, switch to the next mode
                     when (currentMode) {
@@ -105,79 +108,76 @@ fun TimerPage(settings: TimerSettings, onReset: () -> Unit) {
         }
     }
 
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = dynamicColor
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(color = dynamicColor)
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+        // Mode display
+        TimerDisplayRow(label = "Mode", value = currentMode.name, color = MaterialTheme.colorScheme.primary)
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Timer countdown display
+        Text(
+            text = String.format(Locale.getDefault(), "%02d:%02d", timeRemaining / 60, timeRemaining % 60),
+            fontSize = 96.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(bottom = 24.dp)
+        )
+
+        // Round display
+        TimerDisplayRow(label = "Round", value = "$currentRound / ${settings.rounds}")
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Total elapsed time display
+        TimerDisplayRow(label = "Total Elapsed", value = String.format(Locale.getDefault(), "%02d:%02d", totalElapsedTime / 60, totalElapsedTime % 60))
+
+        Spacer(modifier = Modifier.weight(1f))
+
+        // Control buttons
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Mode display
-            TimerDisplayRow(label = "Mode", value = currentMode.name, color = MaterialTheme.colorScheme.secondary)
-            Spacer(modifier = Modifier.height(24.dp))
+            IconButton(onClick = { isVolumeOn = !isVolumeOn }) {
+                Icon(
+                    imageVector = if (isVolumeOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
+                    contentDescription = "Toggle Volume",
+                    modifier = Modifier.size(48.dp)
+                )
+            }
 
-            // Timer countdown display
-            Text(
-                text = String.format(Locale.getDefault(), "%02d:%02d", timeRemaining / 60, timeRemaining % 60),
-                fontSize = 96.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.secondary,
-                modifier = Modifier.padding(bottom = 24.dp)
-            )
-
-            // Round display
-            TimerDisplayRow(label = "Round", value = "$currentRound / ${settings.rounds}")
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Total elapsed time display
-            TimerDisplayRow(label = "Total Elapsed", value = String.format(Locale.getDefault(), "%02d:%02d", totalElapsedTime / 60, totalElapsedTime % 60))
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            // Control buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
+            Button(
+                onClick = { isRunning = !isRunning },
+                modifier = Modifier
+                    .weight(1f)
+                    .height(64.dp)
+                    .padding(horizontal = 8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.tertiary
+                ),
+                shape = RoundedCornerShape(12.dp)
             ) {
-                // Volume Toggle Button
-                IconButton(onClick = { isVolumeOn = !isVolumeOn }) {
-                    Icon(
-                        imageVector = if (isVolumeOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
-                        contentDescription = "Toggle Volume",
-                        modifier = Modifier.size(48.dp)
-                    )
-                }
+                Icon(
+                    imageVector = if (isRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = "Start/Pause",
+                    modifier = Modifier.size(36.dp)
+                )
+            }
 
-                // Start/Pause Button
-                Button(
-                    onClick = { isRunning = !isRunning },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(64.dp)
-                        .padding(horizontal = 8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(
-                        imageVector = if (isRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = "Start/Pause",
-                        modifier = Modifier.size(36.dp)
-                    )
-                }
-
-                // Reset Button
-                IconButton(onClick = { isResetDialogVisible = true }) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Reset",
-                        modifier = Modifier.size(48.dp)
-                    )
-                }
+            // Reset Button
+            IconButton(onClick = { isResetDialogVisible = true }) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = "Reset",
+                    modifier = Modifier.size(48.dp)
+                )
             }
         }
     }
@@ -212,7 +212,7 @@ fun TimerPage(settings: TimerSettings, onReset: () -> Unit) {
  * A reusable composable for a label and value row.
  */
 @Composable
-fun TimerDisplayRow(label: String, value: String, color: Color = MaterialTheme.colorScheme.onBackground) {
+fun TimerDisplayRow(label: String, value: String, color: Color = MaterialTheme.colorScheme.primary) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
