@@ -1,5 +1,7 @@
 package com.example.hiittimer
 
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,7 +21,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
-import kotlinx.coroutines.delay
+import kotlin.concurrent.fixedRateTimer
 import java.util.Locale
 
 /**
@@ -56,54 +58,71 @@ fun TimerPage(settings: TimerSettings, onReset: () -> Unit) {
     }
 
     val context = LocalContext.current
+    val soundPlayer = remember { SoundPlayer(context) }
+    val volume = if (isVolumeOn) 1.0f else 0f
 
-    // LaunchedEffect is used to run a coroutine that handles the timer logic
-    LaunchedEffect(key1 = isRunning) {
+    LaunchedEffect(isRunning) {
         if (isRunning) {
-            // Loop while the timer is running and the workout is not finished
-            while (isRunning && currentMode != TimerMode.FINISHED) {
-                // Decrement timeRemaining and increment totalElapsedTime every second
-                if (timeRemaining > 0) {
-                    if (timeRemaining < 4) {
-                        SoundPlayer.playCountdown(context)
-                    }
-                    delay(1000L)
-                    timeRemaining--
-                    if (currentMode != TimerMode.PREP) {
-                        totalElapsedTime++
-                    }
-                } else {
-                    // Time for the current mode has run out, switch to the next mode
-                    when (currentMode) {
-                        TimerMode.PREP -> {
-                            currentMode = TimerMode.WORK
-                            timeRemaining = settings.workSeconds
-                            SoundPlayer.playSwitch(context)
-                        }
-                        TimerMode.WORK -> {
-                            if (currentRound < settings.rounds) {
-                                currentMode = TimerMode.REST
-                                timeRemaining = settings.restSeconds
-                                SoundPlayer.playSwitch(context)
-                            } else {
-                                // All rounds are complete, finish the workout
-                                currentMode = TimerMode.FINISHED
-                                isRunning = false
-                                SoundPlayer.playFinish(context)
+            val mainHandler = Handler(Looper.getMainLooper())
+
+            val timer = fixedRateTimer(
+                name = "hiit-timer",
+                initialDelay = 1000L,
+                period = 1000L
+            ) {
+                mainHandler.post {
+                    if (!isRunning) {
+                        cancel()
+                    } else {
+                        if (timeRemaining > 0) {
+                            if (timeRemaining == 1) {
+                                soundPlayer.playSwitch(volume)
+                            } else if (timeRemaining < 5) {
+                                soundPlayer.playCountdown(volume)
                             }
-                        }
-                        TimerMode.REST -> {
-                            currentMode = TimerMode.WORK
-                            timeRemaining = settings.workSeconds
-                            currentRound++
-                            SoundPlayer.playSwitch(context)
-                        }
-                        TimerMode.FINISHED -> {
-                            // Should not be reachable, but as a safeguard
-                            isRunning = false
+                            timeRemaining--
+                            if (currentMode != TimerMode.PREP) {
+                                totalElapsedTime++
+                            }
+                        } else {
+                            when (currentMode) {
+                                TimerMode.PREP -> {
+                                    currentMode = TimerMode.WORK
+                                    timeRemaining = settings.workSeconds
+                                }
+                                TimerMode.WORK -> {
+                                    if (currentRound < settings.rounds) {
+                                        currentMode = TimerMode.REST
+                                        timeRemaining = settings.restSeconds
+                                    } else {
+                                        currentMode = TimerMode.FINISHED
+                                        isRunning = false
+                                        soundPlayer.playFinish(volume)
+                                        cancel()
+                                    }
+                                }
+                                TimerMode.REST -> {
+                                    currentMode = TimerMode.WORK
+                                    timeRemaining = settings.workSeconds
+                                    currentRound++
+                                }
+                                TimerMode.FINISHED -> {
+                                    isRunning = false
+                                    cancel()
+                                }
+                            }
                         }
                     }
                 }
+            }
+
+            try {
+                // keep coroutine alive while timer runs
+                while (isRunning) {
+                    kotlinx.coroutines.delay(1000L)
+                }
+            } finally {
+                timer.cancel()
             }
         }
     }
@@ -116,11 +135,9 @@ fun TimerPage(settings: TimerSettings, onReset: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // Mode display
         TimerDisplayRow(label = "Mode", value = currentMode.name, color = MaterialTheme.colorScheme.primary)
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Timer countdown display
         Text(
             text = String.format(Locale.getDefault(), "%02d:%02d", timeRemaining / 60, timeRemaining % 60),
             fontSize = 96.sp,
@@ -129,16 +146,13 @@ fun TimerPage(settings: TimerSettings, onReset: () -> Unit) {
             modifier = Modifier.padding(bottom = 24.dp)
         )
 
-        // Round display
         TimerDisplayRow(label = "Round", value = "$currentRound / ${settings.rounds}")
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Total elapsed time display
         TimerDisplayRow(label = "Total Elapsed", value = String.format(Locale.getDefault(), "%02d:%02d", totalElapsedTime / 60, totalElapsedTime % 60))
 
         Spacer(modifier = Modifier.weight(1f))
 
-        // Control buttons
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly,
@@ -182,8 +196,6 @@ fun TimerPage(settings: TimerSettings, onReset: () -> Unit) {
         }
     }
 
-
-    // Confirmation dialog for the reset button
     if (isResetDialogVisible) {
         AlertDialog(
             onDismissRequest = { isResetDialogVisible = false },
