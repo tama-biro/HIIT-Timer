@@ -2,13 +2,18 @@ package com.example.hiittimer
 
 import com.example.hiittimer.ui.theme.HIITTimerTheme
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.compose.ui.Modifier
 
 data class TimerSettings(
     val prepSeconds: Int,
@@ -25,9 +30,15 @@ class MainActivity : ComponentActivity() {
 
                 NavHost(navController = navController, startDestination = "landing") {
                     composable("landing") {
-                        TimerLandingPage(onStart = { settings ->
-                            navController.navigate("timer/${settings.prepSeconds}/${settings.workSeconds}/${settings.restSeconds}/${settings.rounds}")
-                        })
+                        Surface(
+                            modifier = Modifier.fillMaxSize(),
+                            color = MaterialTheme.colorScheme.surface
+                        ) {
+                            TimerLandingPage(
+                                onStart = { settings ->
+                                navController.navigate("timer/${settings.prepSeconds}/${settings.workSeconds}/${settings.restSeconds}/${settings.rounds}")
+                            })
+                        }
                     }
                     composable(
                         "timer/{prepSeconds}/{workSeconds}/{restSeconds}/{rounds}",
@@ -45,12 +56,18 @@ class MainActivity : ComponentActivity() {
 
                         val settings = TimerSettings(prep, work, rest, rounds)
 
-                        TimerPage(settings = settings, onReset = {
-                            navController.popBackStack()
-                        })
+                        Surface(
+                            modifier = Modifier.fillMaxSize(),
+                            color = MaterialTheme.colorScheme.surface
+                        ) {
+                            TimerPage(settings = settings, onReset = {
+                                navController.popBackStack()
+                            })
+                        }
                     }
                 }
             }
         }
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 }
