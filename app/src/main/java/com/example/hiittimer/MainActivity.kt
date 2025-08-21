@@ -14,6 +14,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.compose.ui.Modifier
+import com.example.hiittimer.landingpage.LandingPage
+import com.example.hiittimer.timerpage.TimerPage
 
 data class TimerSettings(
     val prepSeconds: Int,
@@ -34,10 +36,10 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier.fillMaxSize(),
                             color = MaterialTheme.colorScheme.surface
                         ) {
-                            TimerLandingPage(
+                            LandingPage(
                                 onStart = { settings ->
-                                navController.navigate("timer/${settings.prepSeconds}/${settings.workSeconds}/${settings.restSeconds}/${settings.rounds}")
-                            })
+                                    navController.navigate("timer/${settings.prepSeconds}/${settings.workSeconds}/${settings.restSeconds}/${settings.rounds}")
+                                })
                         }
                     }
                     composable(

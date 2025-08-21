@@ -1,8 +1,9 @@
-package com.example.hiittimer
+package com.example.hiittimer.timerpage
 
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.SoundPool
+import com.example.hiittimer.R
 
 class SoundPlayer(private val context: Context) {
     private val soundPool: SoundPool
@@ -24,6 +25,10 @@ class SoundPlayer(private val context: Context) {
         countdownSoundId = soundPool.load(context, R.raw.beep_sound, 1)
         switchSoundId = soundPool.load(context, R.raw.wee_sound, 1)
         finishSoundId = soundPool.load(context, R.raw.yaas_sound, 1)
+    }
+
+    fun setVolume(volume: Float) {
+
     }
 
     fun playCountdown(volume: Float) {
