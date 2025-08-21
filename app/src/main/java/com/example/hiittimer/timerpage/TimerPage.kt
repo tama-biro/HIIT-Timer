@@ -1,5 +1,6 @@
-package com.example.hiittimer
+package com.example.hiittimer.timerpage
 
+import android.app.Application
 import android.os.Handler
 import android.os.Looper
 import androidx.compose.foundation.background
@@ -16,11 +17,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.hiittimer.TimerSettings
+import kotlinx.coroutines.delay
 import kotlin.concurrent.fixedRateTimer
 import java.util.Locale
 
@@ -40,29 +44,24 @@ enum class TimerMode { PREP, WORK, REST, FINISHED }
  * which would typically navigate back to the landing page.
  */
 @Composable
-fun TimerPage(settings: TimerSettings, onReset: () -> Unit) {
-    // State variables for the timer
-    var isRunning by remember { mutableStateOf(false) }
-    var totalElapsedTime by remember { mutableIntStateOf(0) }
-    var currentRound by remember { mutableIntStateOf(1) }
-    var currentMode by remember { mutableStateOf(TimerMode.PREP) }
-    var timeRemaining by remember { mutableIntStateOf(settings.prepSeconds) }
-    var isResetDialogVisible by remember { mutableStateOf(false) }
-    var isVolumeOn by remember { mutableStateOf(true) }
+fun TimerPage(
+    settings: TimerSettings,
+    onReset: () -> Unit,
+) {
+    val application = LocalContext.current.applicationContext as Application
+    val viewModel: TimerPageViewModel = viewModel(
+        factory = TimerPageViewModelFactory(application, settings)
+    )
 
-    val dynamicColor = when (currentMode) {
+    val dynamicColor = when (viewModel.currentMode) {
         TimerMode.PREP -> MaterialTheme.colorScheme.surface
-        TimerMode.WORK -> Color(0xFFC42ECC)
-        TimerMode.REST -> Color(0xFF7FF160)
+        TimerMode.WORK -> Color(0xFF7FF160)
+        TimerMode.REST -> Color(0xFFC42ECC)
         TimerMode.FINISHED -> MaterialTheme.colorScheme.surface
     }
 
-    val context = LocalContext.current
-    val soundPlayer = remember { SoundPlayer(context) }
-    val volume = if (isVolumeOn) 1.0f else 0f
-
-    LaunchedEffect(isRunning) {
-        if (isRunning) {
+    LaunchedEffect(viewModel.isRunning) {
+        if (viewModel.isRunning) {
             val mainHandler = Handler(Looper.getMainLooper())
 
             val timer = fixedRateTimer(
@@ -71,43 +70,52 @@ fun TimerPage(settings: TimerSettings, onReset: () -> Unit) {
                 period = 1000L
             ) {
                 mainHandler.post {
-                    if (!isRunning) {
+                    if (!viewModel.isRunning) {
                         cancel()
                     } else {
-                        if (timeRemaining > 0) {
-                            if (timeRemaining == 1) {
-                                soundPlayer.playSwitch(volume)
-                            } else if (timeRemaining < 5) {
-                                soundPlayer.playCountdown(volume)
+                        if (viewModel.timeRemaining > 0) {
+                            if (viewModel.timeRemaining == 1) {
+                                viewModel.playSwitchSound()
+                            } else if (viewModel.timeRemaining < 5) {
+                                viewModel.playCountdownSound()
                             }
-                            timeRemaining--
-                            if (currentMode != TimerMode.PREP) {
-                                totalElapsedTime++
+                            viewModel.reduceTimer()
+                            if (viewModel.currentMode != TimerMode.PREP) {
+                                viewModel.addTotalTime()
                             }
                         } else {
-                            when (currentMode) {
+                            when (viewModel.currentMode) {
                                 TimerMode.PREP -> {
-                                    currentMode = TimerMode.WORK
-                                    timeRemaining = settings.workSeconds
+                                    viewModel.setCurrentModeAndTimeRemaining(
+                                        TimerMode.WORK,
+                                        settings.workSeconds
+                                    )
                                 }
                                 TimerMode.WORK -> {
-                                    if (currentRound < settings.rounds) {
-                                        currentMode = TimerMode.REST
-                                        timeRemaining = settings.restSeconds
+                                    if (viewModel.currentRound < settings.rounds) {
+                                        viewModel.setCurrentModeAndTimeRemaining(
+                                            TimerMode.REST,
+                                            settings.restSeconds
+                                        )
                                     } else {
-                                        currentMode = TimerMode.FINISHED
-                                        isRunning = false
-                                        soundPlayer.playFinish(volume)
+                                        viewModel.setCurrentModeAndTimeRemaining(
+                                            TimerMode.FINISHED,
+                                            0
+                                        )
+                                        viewModel.onToggleFinish()
+                                        viewModel.playFinishSound()
                                         cancel()
                                     }
                                 }
                                 TimerMode.REST -> {
-                                    currentMode = TimerMode.WORK
-                                    timeRemaining = settings.workSeconds
-                                    currentRound++
+                                    viewModel.setCurrentModeAndTimeRemaining(
+                                        TimerMode.WORK,
+                                        settings.workSeconds
+                                    )
+                                    viewModel.addRoundCount()
                                 }
                                 TimerMode.FINISHED -> {
-                                    isRunning = false
+                                    viewModel.onToggleFinish()
                                     cancel()
                                 }
                             }
@@ -117,9 +125,8 @@ fun TimerPage(settings: TimerSettings, onReset: () -> Unit) {
             }
 
             try {
-                // keep coroutine alive while timer runs
-                while (isRunning) {
-                    kotlinx.coroutines.delay(1000L)
+                while (viewModel.isRunning) {
+                    delay(1000L)
                 }
             } finally {
                 timer.cancel()
@@ -135,21 +142,21 @@ fun TimerPage(settings: TimerSettings, onReset: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        TimerDisplayRow(label = "Mode", value = currentMode.name, color = MaterialTheme.colorScheme.primary)
+        TimerDisplayRow(label = "Mode", value = viewModel.currentMode.name, color = MaterialTheme.colorScheme.primary)
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
-            text = String.format(Locale.getDefault(), "%02d:%02d", timeRemaining / 60, timeRemaining % 60),
+            text = String.format(Locale.getDefault(), "%02d:%02d", viewModel.timeRemaining / 60, viewModel.timeRemaining % 60),
             fontSize = 96.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(bottom = 24.dp)
         )
 
-        TimerDisplayRow(label = "Round", value = "$currentRound / ${settings.rounds}")
+        TimerDisplayRow(label = "Round", value = "${viewModel.currentRound} / ${settings.rounds}")
         Spacer(modifier = Modifier.height(16.dp))
 
-        TimerDisplayRow(label = "Total Elapsed", value = String.format(Locale.getDefault(), "%02d:%02d", totalElapsedTime / 60, totalElapsedTime % 60))
+        TimerDisplayRow(label = "Total Elapsed", value = String.format(Locale.getDefault(), "%02d:%02d", viewModel.totalElapsedTime / 60, viewModel.totalElapsedTime % 60))
 
         Spacer(modifier = Modifier.weight(1f))
 
@@ -158,16 +165,16 @@ fun TimerPage(settings: TimerSettings, onReset: () -> Unit) {
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = { isVolumeOn = !isVolumeOn }) {
+            IconButton(onClick = { viewModel.onToggleVolume() }) {
                 Icon(
-                    imageVector = if (isVolumeOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
+                    imageVector = if (viewModel.isVolumeOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
                     contentDescription = "Toggle Volume",
                     modifier = Modifier.size(48.dp)
                 )
             }
 
             Button(
-                onClick = { isRunning = !isRunning },
+                onClick = { viewModel.onTogglePlay() },
                 modifier = Modifier
                     .weight(1f)
                     .height(64.dp)
@@ -179,14 +186,13 @@ fun TimerPage(settings: TimerSettings, onReset: () -> Unit) {
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Icon(
-                    imageVector = if (isRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    imageVector = if (viewModel.isRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
                     contentDescription = "Start/Pause",
                     modifier = Modifier.size(36.dp)
                 )
             }
 
-            // Reset Button
-            IconButton(onClick = { isResetDialogVisible = true }) {
+            IconButton(onClick = { viewModel.onShowResetDialog() }) {
                 Icon(
                     imageVector = Icons.Default.Refresh,
                     contentDescription = "Reset",
@@ -196,23 +202,23 @@ fun TimerPage(settings: TimerSettings, onReset: () -> Unit) {
         }
     }
 
-    if (isResetDialogVisible) {
+    if (viewModel.isResetDialogVisible) {
         AlertDialog(
-            onDismissRequest = { isResetDialogVisible = false },
+            onDismissRequest = { viewModel.onDisableResetDialog() },
             title = { Text(text = "Are you sure?") },
             text = { Text(text = "Do you want to reset the timers and go back to the setup page?") },
             confirmButton = {
                 Button(
                     onClick = {
-                        isResetDialogVisible = false
-                        onReset() // Call the reset callback
+                        viewModel.onDisableResetDialog()
+                        onReset()
                     }
                 ) {
                     Text("Yes")
                 }
             },
             dismissButton = {
-                Button(onClick = { isResetDialogVisible = false }) {
+                Button(onClick = { viewModel.onDisableResetDialog() }) {
                     Text("No")
                 }
             }

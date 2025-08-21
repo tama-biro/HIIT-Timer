@@ -1,4 +1,4 @@
-package com.example.hiittimer
+package com.example.hiittimer.landingpage
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Row
